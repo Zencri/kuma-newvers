@@ -1,3 +1,24 @@
+# Kuma
+An app written in Next.js + Tauri
+
+## Instructions to run locally
+1. Install dependencies:
+
+```bash
+npm install
+# or
+bun install
+```
+
+2. Run the development server with Tauri:
+
+```bash
+npm run tauri dev
+# or
+bun tauri dev
+```
+
+# Next.js
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
