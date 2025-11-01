@@ -6,7 +6,7 @@ import Chatbox from "./components/chatbox";
 import { useEffect, useState } from "react";
 
 export default function Home() {
-  const [sideBarCollapsed, setSideBarCollapsed] = useState(false)
+  const [sideBarCollapsed, setSideBarCollapsed] = useState(true)
 
   return (
     <div className="">

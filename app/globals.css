@@ -17,4 +17,5 @@ body {
   color: var(--foreground);
   font-family: var(--font-poppins), sans-serif;
   height: 100dvh;
+  overflow: hidden;
 }
