@@ -1,5 +1,5 @@
 # Kuma
-An app written in Next.js + Tauri
+A studying AI companion written in Next.js + Tauri powered by a Hugging Face model.
 
 ## Instructions to run locally
 1. Install dependencies:
