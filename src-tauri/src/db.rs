@@ -1,4 +1,5 @@
 use rusqlite::{Connection, Result};
+use serde_json::json;
 use std::path::PathBuf;
 use std::fs;
 use dirs::data_dir;
@@ -51,6 +52,21 @@ pub fn init_db() -> Result<Connection> {
     )?;
 
     migrate_schema(&conn)?;
+
+    if first_time {
+        conn.execute(
+            "INSERT INTO users (name) VALUES (?1)",
+            [&"Kuma"],
+        )?;
+        println!("Created initial user 'Kuma' in database");
+
+        let mut sp = data_dir().expect("Cannot find data_dir");
+        sp.push("Kuma");
+        fs::create_dir_all(&sp).expect("Failed to create data dir for session");
+        sp.push("session.json");
+        let session_json = json!({ "current_user_id": 1 });
+        fs::write(sp, serde_json::to_string(&session_json).unwrap()).expect("Failed to write initial session.json");
+    }
 
     println!("Using database at {:?}", db_path);
     Ok(conn)
