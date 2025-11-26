@@ -56,12 +56,12 @@ pub fn init_db() -> Result<Connection> {
     if first_time {
         conn.execute(
             "INSERT INTO users (name) VALUES (?1)",
-            [&"Kuma"],
+            [&"Kikuchiyo"],
         )?;
-        println!("Created initial user 'Kuma' in database");
+        println!("Created initial user 'Kikuchiyo' in database");
 
         let mut sp = data_dir().expect("Cannot find data_dir");
-        sp.push("Kuma");
+        sp.push("Kikuchiyo");
         fs::create_dir_all(&sp).expect("Failed to create data dir for session");
         sp.push("session.json");
         let session_json = json!({ "current_user_id": 1 });
