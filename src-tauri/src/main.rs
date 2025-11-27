@@ -10,7 +10,7 @@ fn main() {
   db::init_db().expect("Failed to initialize database");
 
   let ai_key = env::var("AI_KEY").expect("Missing AI_KEY");
-  let model = env::var("MODEL").unwrap_or_else(|_| "mistralai/Mistral-7B-Instruct-v0.2".to_string());
+  let model = env::var("MODEL").unwrap_or_else(|_| "openai/gpt-oss-120b".to_string());
   let notes = env::var("NOTES").unwrap_or_default();
 
   println!("Using model: {}", model);

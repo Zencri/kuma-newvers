@@ -16,7 +16,7 @@ export default function Home() {
         <main className="">
           <div className="flex h-[100dvh]">
             <Sidebar sideBarCollapsed={sideBarCollapsed} setSideBarCollapsed={setSideBarCollapsed} />
-            <Chatbox sideBarCollapsed={sideBarCollapsed} chatEnabled={chatSendEnabled} setChatEnabled={setChatSendEnabled} />
+            <Chatbox sideBarCollapsed={sideBarCollapsed} chatSendEnabled={chatSendEnabled} setChatSendEnabled={setChatSendEnabled} />
           </div>
         </main>
       </CurrentUserProvider>

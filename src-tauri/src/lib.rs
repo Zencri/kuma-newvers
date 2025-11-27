@@ -1,6 +1,7 @@
 pub mod db;
 pub mod models;
 pub mod session;
+pub mod chat;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(ai_key: &str) {
@@ -24,7 +25,9 @@ pub fn run(ai_key: &str) {
       db::get_messages,
       db::save_message,
       session::get_current_user,
-      session::set_current_user
+      session::set_current_user,
+      chat::send_message,
+      chat::summarize_text
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
