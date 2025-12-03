@@ -54,6 +54,8 @@ type QuizContextType = {
     togglePinSession: (id: string) => void;
     clearAllSessions: () => void;
     enableDataPreservation: () => void;
+    reviewTrigger: string | null; // <--- ADD THIS
+    setReviewTrigger: (prompt: string | null) => void; // <--- ADD THIS
 };
 
 const QuizContext = createContext<QuizContextType | undefined>(undefined);
@@ -71,6 +73,32 @@ export function QuizProvider({ children }: { children: ReactNode }) {
     const [flashcards, setFlashcards] = useState<FlashcardData[]>([]);
     const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
     const [sessions, setSessions] = useState<SavedSession[]>([]);
+
+    const [reviewTrigger, setReviewTrigger] = useState<string | null>(null); // <--- ADD THIS
+
+    const [failedQuestionIds, setFailedQuestionIds] = useState<number[]>([]); 
+
+    // Helper to save the mistakes
+    const saveFailedQuestions = (ids: number[]) => {
+        setFailedQuestionIds(ids);
+    };
+
+    // The core function called by the Retry button
+    const startTargetedRetry = () => {
+        if (failedQuestionIds.length === 0) {
+            setQuizMode(false); // If somehow empty, just close it.
+            return;
+        }
+
+        // 1. Filter the quiz questions to only include the failed ones
+        const weakQuestions = quizQuestions.filter(q => failedQuestionIds.includes(q.id));
+        
+        // 2. Set the NEW quiz list to only those weak questions
+        setQuizQuestions(weakQuestions); 
+        
+        // 3. Open the quiz panel (QuizPanel's useEffect will handle the reset to Q1)
+        setQuizMode(true); 
+    };
     
     // --- NEW: Preservation Ref ---
     const preserveDataRef = useRef(false);
@@ -210,7 +238,11 @@ export function QuizProvider({ children }: { children: ReactNode }) {
             flashcards, setFlashcards, quizQuestions, setQuizQuestions,
             sessions, setSessions, createNewSession, loadSession, currentSessionId,
             deleteSession, renameSession, togglePinSession, clearAllSessions,
-            enableDataPreservation
+            enableDataPreservation,
+            // --- ADDED FOR AI RETRY ---
+            reviewTrigger, setReviewTrigger,
+            failedQuestionIds, saveFailedQuestions,
+            startTargetedRetry // <--- NEW FUNCTION
         }}>
             {children}
         </QuizContext.Provider>

@@ -1,25 +1,35 @@
 "use client"
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuiz } from "../context/quiz";
 import FlashcardPanel from "./FlashcardPanel";
 
 export default function QuizPanel() {
-    const { modeType, setQuizMode, quizQuestions, setQuizQuestions } = useQuiz();
+    // @ts-ignore
+    const { modeType, setQuizMode, quizQuestions, setQuizQuestions, setReviewTrigger, saveFailedQuestions } = useQuiz();
 
     // --- LOCAL STATE ---
     const [currentQIndex, setCurrentQIndex] = useState(0);
     const [score, setScore] = useState(0);
     const [showResult, setShowResult] = useState(false);
     
-    // Tracks which option the user clicked (0-3)
     const [selectedOption, setSelectedOption] = useState<number | null>(null);
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-    
-    // Hint Toggle State
     const [isHintOpen, setIsHintOpen] = useState(false);
-
-    // Track Weaknesses (IDs of wrong answers)
     const [wrongQuestionIds, setWrongQuestionIds] = useState<number[]>([]);
+
+    // --- THE FIX: FORCE RESET ON NEW QUIZ LIST ---
+    // This runs every time the quizQuestions list is updated (meaning a targeted retry started).
+    useEffect(() => {
+        // If there are questions, force reset local progress counters
+        if (quizQuestions && quizQuestions.length > 0) {
+            setCurrentQIndex(0);
+            setScore(0);
+            setShowResult(false);
+            setSelectedOption(null);
+            setIsCorrect(null);
+            setWrongQuestionIds([]);
+        }
+    }, [quizQuestions]); // <--- NEW DEPENDENCY: Resets on every new quiz list
 
     // Safety Checks
     if (modeType === "FLASHCARDS") return <FlashcardPanel />;
@@ -38,7 +48,7 @@ export default function QuizPanel() {
 
     // --- ANSWER LOGIC ---
     const handleAnswer = (index: number) => {
-        if (selectedOption !== null) return; // Prevent double clicking
+        if (selectedOption !== null) return; 
         setSelectedOption(index);
         
         const correct = index === currentQuestion.correctIndex;
@@ -47,7 +57,6 @@ export default function QuizPanel() {
         if (correct) {
             setScore(score + 1);
         } else {
-            // Track the mistake
             if (!wrongQuestionIds.includes(currentQuestion.id)) {
                 setWrongQuestionIds(prev => [...prev, currentQuestion.id]);
             }
@@ -62,25 +71,43 @@ export default function QuizPanel() {
             setCurrentQIndex(currentQIndex + 1);
             setSelectedOption(null);
             setIsCorrect(null);
-            setIsHintOpen(false); // Reset hint for next question
+            setIsHintOpen(false); 
         }
     };
 
-    // --- SMART RETRY LOGIC ---
-    const handleSmartRetry = () => {
-        const weakQs = quizQuestions.filter(q => wrongQuestionIds.includes(q.id));
-        const strongQs = quizQuestions.filter(q => !wrongQuestionIds.includes(q.id));
-        const reviewQs = strongQs.slice(0, Math.ceil(strongQs.length / 2));
-        const newSet = [...weakQs, ...reviewQs];
-        const finalSet = newSet.length > 0 ? newSet : quizQuestions;
+    // --- GENERATE REVIEWER LOGIC ---
+    const handleGenerateReview = () => {
+        const weakQs = quizQuestions.filter((q: any) => wrongQuestionIds.includes(q.id));
+        
+        const topicList = weakQs.map((q: any) => q.topic).join(", ");
+        const detailList = weakQs.map((q: any) => `
+        - Concept: ${q.topic}
+        - Question: "${q.question}"
+        - Correct Answer: "${q.options[q.correctIndex]}"
+        - Explanation: "${q.explanation}"
+        `).join("\n");
 
-        setQuizQuestions(finalSet);
-        setCurrentQIndex(0);
-        setScore(0);
-        setShowResult(false);
-        setSelectedOption(null);
-        setIsCorrect(null);
-        setWrongQuestionIds([]);
+        const prompt = `
+        CONTEXT: The user just failed a quiz on these topics: ${topicList}.
+        
+        SPECIFIC MISTAKES:
+        ${detailList}
+
+        TASK: 
+        1. Explain WHY the user might have gotten these wrong.
+        2. Provide a detailed "Mini-Reviewer" or study guide specifically for these concepts.
+        3. Use analogies or simple terms.
+        4. End the message by asking: "Type **'Ready'** or click below when you want to retry the quiz."
+        5. Add this specific tag at the very end: [OPEN_RETRY_BUTTON]
+        `;
+
+        if (saveFailedQuestions) {
+            saveFailedQuestions(wrongQuestionIds); 
+        }
+        if (setReviewTrigger) {
+            setReviewTrigger(prompt); 
+        }
+        setQuizMode(false); 
     };
 
     // --- RESULTS SCREEN ---
@@ -101,8 +128,11 @@ export default function QuizPanel() {
 
                 <div className="flex flex-col gap-3 w-full max-w-xs">
                      {!isPerfect && (
-                        <button onClick={handleSmartRetry} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all">
-                            ⚡ Fix Weak Areas & Review
+                        <button 
+                            onClick={handleGenerateReview} 
+                            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all"
+                        >
+                            ⚡ Generate AI Study Guide
                         </button>
                     )}
                     <button onClick={() => setQuizMode(false)} className="text-gray-500 hover:text-white mt-2 text-sm">Return to Chat</button>
@@ -122,7 +152,6 @@ export default function QuizPanel() {
                 <button onClick={() => setQuizMode(false)} className="text-gray-500 hover:text-white">✕</button>
             </div>
 
-            {/* Progress Bar */}
             <div className="w-full bg-gray-800 h-2 rounded-full mb-6">
                 <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${((currentQIndex + 1) / quizQuestions.length) * 100}%` }} />
             </div>
@@ -130,11 +159,9 @@ export default function QuizPanel() {
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                 <h3 className="text-xl font-medium mb-6 leading-relaxed">{currentQuestion.question}</h3>
                 
-                {/* Options */}
                 <div className="space-y-3">
-                    {currentQuestion.options.map((option, idx) => {
+                    {quizQuestions[currentQIndex].options.map((option: string, idx: number) => {
                         let btnClass = "bg-[#2a2a2a] border-gray-600 hover:border-gray-400";
-                        
                         if (selectedOption !== null) {
                             if (idx === currentQuestion.correctIndex) btnClass = "bg-green-900/40 border-green-500 text-green-200";
                             else if (idx === selectedOption && !isCorrect) btnClass = "bg-red-900/40 border-red-500 text-red-200";
@@ -148,7 +175,6 @@ export default function QuizPanel() {
                     })}
                 </div>
 
-                {/* --- 1. EXPLANATION SECTION (Shows AFTER answer) --- */}
                 {selectedOption !== null && (
                     <div className="mt-6 animate-in fade-in slide-in-from-bottom-2 duration-300 pb-4">
                         <div className={`p-4 rounded-lg mb-4 border ${isCorrect ? "bg-green-900/20 border-green-800" : "bg-red-900/20 border-red-800"}`}>
@@ -159,7 +185,7 @@ export default function QuizPanel() {
                                 </span>
                             </div>
                             <p className="text-sm text-gray-300 leading-relaxed">
-                                {currentQuestion.explanation || "No explanation provided for this question."}
+                                {currentQuestion.explanation || "No explanation provided."}
                             </p>
                         </div>
                         <button onClick={handleNext} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg transition-all active:scale-95">
@@ -168,7 +194,6 @@ export default function QuizPanel() {
                     </div>
                 )}
 
-                {/* --- 2. HINT DROPDOWN (Shows BEFORE answer) --- */}
                 {currentQuestion.hint && selectedOption === null && (
                     <div className="mt-8">
                         <button 
@@ -180,7 +205,7 @@ export default function QuizPanel() {
                         
                         {isHintOpen && (
                             <div className="mt-2 p-3 bg-blue-900/20 border border-blue-900/50 rounded-lg text-sm text-blue-200 text-center animate-in fade-in zoom-in-95 duration-200">
-                                💡 {currentQuestion.hint}
+                                💡 {currentQuestion?.hint} {/* <--- FIXED LINE */}
                             </div>
                         )}
                     </div>

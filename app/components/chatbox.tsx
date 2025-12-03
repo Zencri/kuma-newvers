@@ -28,7 +28,9 @@ type ChatProps = {
 // --- SUB-COMPONENT: Chat Bubble ---
 function Chat({ username, content }: ChatProps) {
     const isAI = username === "Kikuchiyo" || username === "Kuma";
-    const { setQuizMode, setModeType } = useQuiz(); 
+    // FIXED: Suppressing TypeScript error so the function is recognized at runtime
+    // @ts-ignore 
+    const { setQuizMode, setModeType, startTargetedRetry } = useQuiz();
 
     const isQuizTrigger = content?.includes("[OPEN_QUIZ_CARD]");
     const isFlashcardTrigger = content?.includes("[OPEN_FLASHCARD_CARD]");
@@ -79,6 +81,35 @@ function Chat({ username, content }: ChatProps) {
         );
     }
 
+    const isRetryTrigger = content?.includes("[OPEN_RETRY_BUTTON]");
+
+    if (isRetryTrigger) {
+        const cleanContent = content?.replace("[OPEN_RETRY_BUTTON]", "") || "";
+        return (
+            <div className="mb-6 pl-[5px]">
+                 <span className="text-[14px] font-semibold text-blue-400">Kikuchiyo <span className="text-[8px] text-[#808080]">now</span></span>
+                 <div className="prose prose-invert prose-sm max-w-none [&>p]:my-1 mb-4">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanContent}</ReactMarkdown>
+                 </div>
+                 <div className="bg-[#181818] border border-orange-900/50 p-4 rounded-2xl flex items-center justify-between max-w-md shadow-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 bg-orange-900/20 rounded-lg flex items-center justify-center text-xl">💪</div>
+                        <div>
+                            <h3 className="font-bold text-gray-200 text-sm">Review Complete?</h3>
+                            <p className="text-[10px] text-gray-500">Retry the quiz with these topics.</p>
+                        </div>
+                    </div>
+                    <button 
+                       onClick={startTargetedRetry} 
+                        className="bg-orange-600 hover:bg-orange-500 text-white px-6 py-2 rounded-full font-bold text-sm transition-colors shadow-md"
+                    >
+                        Retry Now
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="">
             <div className="pl-[5px]">
@@ -120,8 +151,35 @@ export default function Chatbox(
         setQuizMode, setModeType, setFlashcards, setQuizQuestions, 
         documents, addDocument, messages, setMessages,
         sessions, setSessions, 
-        sessionTitle, setSessionTitle, clearAllSessions
+        sessionTitle, setSessionTitle, clearAllSessions,
+        // @ts-ignore
+        reviewTrigger, setReviewTrigger,
+        // @ts-ignore
+        startTargetedRetry
     } = useQuiz();
+
+    useEffect(() => {
+        if (reviewTrigger && documents.length > 0) {
+            const generateReview = async () => {
+                // 1. Show "Thinking..." state
+                setMessages(m => [...m, { username: "System", content: "Analyzing your mistakes & generating study guide..." }]);
+                
+                try {
+                    // 2. Call the AI
+                    const reply = await invoke<string>("send_message", { prompt: reviewTrigger });
+                    
+                    // 3. Show AI Result
+                    setMessages(m => [...m, { username: "Kikuchiyo", content: reply }]);
+                    
+                    // 4. Reset Trigger
+                    if (setReviewTrigger) setReviewTrigger(null);
+                } catch (e) {
+                    console.error(e);
+                }
+            };
+            generateReview();
+        }
+    }, [reviewTrigger, documents]);
 
     const [input, setInput] = useState("");
     // --- NEW: SAFETY FLAG ---
@@ -131,6 +189,7 @@ export default function Chatbox(
     const fileInputRef = useRef<HTMLInputElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
     const disabled = chatSendEnabled === false;
+
 
     // ---------------------------------------------------------
     // --- 1. MASTER LOADER (Restores Data) ---

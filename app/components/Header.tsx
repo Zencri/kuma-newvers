@@ -23,13 +23,14 @@ const FriendsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" hei
 const CalendarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
 
 // --- COMPONENT: Fitness Modal (Unified Colors + Fixed Rings) ---
+// --- COMPONENT: Fitness Modal (Final Production Version) ---
 function FitnessModal({ onClose }: { onClose: () => void }) {
     const { stats } = useStats();
     const dailyGoal = 60; // Minutes
 
     // 1. STATS VIEW LOGIC
     const rawProgress = (stats.todayMinutes / dailyGoal) * 100;
-    const visualProgress = Math.min(rawProgress, 100); // Caps the ring at 100% visually
+    const visualProgress = Math.min(rawProgress, 100); 
     
     // SVG Math (Radius 50)
     const circumference = 2 * Math.PI * 50;
@@ -55,9 +56,9 @@ function FitnessModal({ onClose }: { onClose: () => void }) {
     for (let i = 1; i <= daysInMonth; i++) days.push(i);
 
     // --- TRENDS LOGIC ---
-    // Force show graph immediately (No 3 day wait)
     const historyCount = Object.keys(stats.history || {}).length;
-    const hasEnoughData = true; // <--- FORCED ON FOR DEMO
+    // The Real Logic: Only show if we have 3 or more days of history
+    const hasEnoughData = historyCount >= 3; 
     
     const timeData = stats.timeOfDay || { morning: 0, afternoon: 0, night: 0 };
     const maxVal = Math.max(timeData.morning, timeData.afternoon, timeData.night, 1);
@@ -85,16 +86,14 @@ function FitnessModal({ onClose }: { onClose: () => void }) {
                 
                 {viewMode === "STATS" ? (
                     <>
-                        {/* 1. MAIN RING (SVG - NO LOOPING) */}
+                        {/* 1. MAIN RING */}
                         <div className="flex justify-center mb-6 relative">
                             <div className="relative w-40 h-40 flex items-center justify-center">
                                 <svg className="transform -rotate-90 w-full h-full">
-                                    {/* Background Track */}
                                     <circle cx="80" cy="80" r="50" stroke="#333" strokeWidth="12" fill="transparent" />
-                                    {/* Progress Fill (Green) */}
                                     <circle
                                         cx="80" cy="80" r="50"
-                                        stroke="#4ade80" // Always Green
+                                        stroke="#4ade80" 
                                         strokeWidth="12" fill="transparent"
                                         strokeDasharray={circumference}
                                         strokeDashoffset={offset}
@@ -123,40 +122,42 @@ function FitnessModal({ onClose }: { onClose: () => void }) {
                             </div>
                         </div>
 
-                        {/* 3. TRENDS CHART (UNIFIED COLORS) */}
+                        {/* 3. TRENDS CHART */}
                         <div className="pt-4 border-t border-gray-700">
                             <h3 className="text-[10px] text-gray-500 uppercase mb-3">Study Time Trends</h3>
-                            <div className="flex items-end justify-between h-16 gap-2 px-4">
-                                
-                                {/* MORNING (Blue) */}
-                                <div className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
-                                    <div className="w-full bg-blue-900/20 rounded-t-sm relative flex items-end h-full">
-                                        <div className="w-full bg-blue-500/80 transition-all duration-500 rounded-t-sm" style={{ height: `${(timeData.morning / maxVal) * 100}%` }}></div>
-                                    </div>
-                                    <span className="text-[9px] text-gray-400 font-bold">Morning</span>
+                            {!hasEnoughData ? (
+                                <div className="text-center text-xs text-gray-600 italic py-2">
+                                    Study for 3 days to unlock trends.
                                 </div>
-
-                                {/* AFTERNOON (Blue) */}
-                                <div className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
-                                    <div className="w-full bg-blue-900/20 rounded-t-sm relative flex items-end h-full">
-                                        <div className="w-full bg-blue-500/80 transition-all duration-500 rounded-t-sm" style={{ height: `${(timeData.afternoon / maxVal) * 100}%` }}></div>
+                            ) : (
+                                <div className="flex items-end justify-between h-16 gap-2 px-4">
+                                    {/* MORNING */}
+                                    <div className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
+                                        <div className="w-full bg-blue-900/20 rounded-t-sm relative flex items-end h-full">
+                                            <div className="w-full bg-blue-500/80 transition-all duration-500 rounded-t-sm" style={{ height: `${(timeData.morning / maxVal) * 100}%` }}></div>
+                                        </div>
+                                        <span className="text-[9px] text-gray-400 font-bold">Morn</span>
                                     </div>
-                                    <span className="text-[9px] text-gray-400 font-bold">Afternoon</span>
-                                </div>
-
-                                {/* NIGHT (Blue) */}
-                                <div className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
-                                    <div className="w-full bg-blue-900/20 rounded-t-sm relative flex items-end h-full">
-                                        <div className="w-full bg-blue-500/80 transition-all duration-500 rounded-t-sm" style={{ height: `${(timeData.night / maxVal) * 100}%` }}></div>
+                                    {/* AFTERNOON */}
+                                    <div className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
+                                        <div className="w-full bg-blue-900/20 rounded-t-sm relative flex items-end h-full">
+                                            <div className="w-full bg-blue-500/80 transition-all duration-500 rounded-t-sm" style={{ height: `${(timeData.afternoon / maxVal) * 100}%` }}></div>
+                                        </div>
+                                        <span className="text-[9px] text-gray-400 font-bold">Aft</span>
                                     </div>
-                                    <span className="text-[9px] text-gray-400 font-bold">Night</span>
+                                    {/* NIGHT */}
+                                    <div className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
+                                        <div className="w-full bg-blue-900/20 rounded-t-sm relative flex items-end h-full">
+                                            <div className="w-full bg-blue-500/80 transition-all duration-500 rounded-t-sm" style={{ height: `${(timeData.night / maxVal) * 100}%` }}></div>
+                                        </div>
+                                        <span className="text-[9px] text-gray-400 font-bold">Night</span>
+                                    </div>
                                 </div>
-
-                            </div>
+                            )}
                         </div>
                     </>
                 ) : (
-                    // --- CALENDAR VIEW (APPLE STYLE RINGS) ---
+                    // --- CALENDAR VIEW ---
                     <div className="animate-in fade-in slide-in-from-right-4">
                         <div className="flex justify-between items-center mb-6 px-2">
                             <button onClick={() => changeMonth(-1)} className="text-gray-400 hover:text-white">&lt;</button>
@@ -183,16 +184,12 @@ function FitnessModal({ onClose }: { onClose: () => void }) {
                                 const r = 14; 
                                 const c = 2 * Math.PI * r;
                                 const off = c - (dayProgress / 100) * c;
-                                
-                                // Red Rings (Apple Style)
                                 const ringColor = dayProgress >= 100 ? "#ef4444" : "#f87171"; 
 
                                 return (
                                     <div key={i} className="relative w-8 h-8 flex items-center justify-center group cursor-default">
                                         <svg className="absolute w-full h-full transform -rotate-90">
-                                            {/* Track */}
                                             <circle cx="16" cy="16" r={r} stroke="#333" strokeWidth="3" fill="transparent" />
-                                            {/* Fill */}
                                             {minutes > 0 && (
                                                 <circle 
                                                     cx="16" cy="16" r={r} 
@@ -204,7 +201,6 @@ function FitnessModal({ onClose }: { onClose: () => void }) {
                                         <span className={`text-[10px] z-10 font-medium ${minutes > 0 ? "text-white" : "text-gray-500"}`}>
                                             {day}
                                         </span>
-                                        {/* Hover Tooltip */}
                                         {minutes > 0 && (
                                             <div className="absolute bottom-9 bg-black border border-gray-700 text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">
                                                 {minutes} mins
