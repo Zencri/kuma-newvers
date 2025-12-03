@@ -81,7 +81,7 @@ function LeaderboardModal({ onClose }: { onClose: () => void }) {
         const fetchLeaders = async () => {
             try {
                 // Get everyone (Top 50)
-                const q = query(collection(db, "users"), orderBy("stats.xp", "desc"), limit(50));
+                const q = query(collection(db, "users"), orderBy("stats.level", "desc"), orderBy("stats.xp", "desc"), limit(50));
                 const snapshot = await getDocs(q);
                 
                 // Filter: Keep ONLY Me + My Friends
@@ -133,7 +133,9 @@ function LeaderboardModal({ onClose }: { onClose: () => void }) {
                                         <span className={`font-mono text-xs w-6 ${index < 3 ? "text-white" : "text-gray-500"}`}>#{index + 1}</span>
                                         <span className={`text-sm ${isMe ? "text-blue-200 font-bold" : "text-gray-300"}`}>{displayName}</span>
                                     </div>
-                                    <span className="text-blue-400 font-mono text-xs">{Math.floor(user.stats?.xp || 0)} XP</span>
+                                    <span className="text-blue-400 font-mono text-xs">
+                                        Lvl {user.stats?.level || 1} • {Math.floor(user.stats?.xp || 0)} XP
+                                    </span>
                                 </div>
                             );
                         })
