@@ -3,15 +3,16 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { useCurrentUser } from "./currentuser";
 import { db } from "../firebase";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, onSnapshot } from "firebase/firestore"; // <--- CHANGED getDoc to onSnapshot
 
 // --- TYPES ---
 export type NotificationItem = {
     id: number;
     text: string;
     time: string;
-    type: "file" | "star" | "habit";
+    type: "file" | "star" | "habit" | "friend"; 
     read: boolean;
+    fromUid?: string; 
 };
 
 type UserStats = {
@@ -22,6 +23,7 @@ type UserStats = {
     streak: number;
     lastStudyDate: string;
     history: { [date: string]: number };
+    friends: string[]; 
 };
 
 type StatsContextType = {
@@ -29,9 +31,9 @@ type StatsContextType = {
     setStats: (stats: UserStats) => void;
     notifications: NotificationItem[];
     addXp: (amount: number) => void;
-    pushNotification: (text: string, type: "file" | "star" | "habit") => void;
+    pushNotification: (text: string, type: "file" | "star" | "habit" | "friend") => void;
     markAllNotifsRead: () => void;
-    toggleNotifRead: (id: number) => void; // <--- NEW FUNCTION
+    toggleNotifRead: (id: number) => void;
     deleteNotification: (id: number) => void;
     getLevelProgress: () => number;
     getRankTitle: () => string;
@@ -51,22 +53,40 @@ export function StatsProvider({ children }: { children: ReactNode }) {
         todayMinutes: 0,
         streak: 0,
         lastStudyDate: new Date().toISOString().split('T')[0],
-        history: {}
+        history: {},
+        friends: [] 
     });
 
-    // --- NOTIFICATIONS STATE ---
-    const [notifications, setNotifications] = useState<NotificationItem[]>([
-        { id: 1, text: "Welcome to Kuma AI!", time: "Just now", type: "star", read: false }
-    ]);
+    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
     const [isTimerActive, setIsTimerActive] = useState(false);
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
     const studyIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-   
+    // --- REAL-TIME LISTENER (The Fix) ---
+    useEffect(() => {
+        if (firebaseUser && !firebaseUser.isAnonymous) {
+            // Listen to the DB constantly
+            const unsub = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    
+                    // Update Stats if changed
+                    if (data.stats) setStats(data.stats);
+                    
+                    // Update Notifications if changed (Instant Friend Requests!)
+                    if (data.notifications) setNotifications(data.notifications);
+                } else {
+                    // Initialize for new user
+                     setNotifications([{ id: 1, text: "Welcome to Kuma AI!", time: "Just now", type: "star", read: false }]);
+                }
+            });
+            return () => unsub(); // Cleanup listener on logout
+        }
+    }, [firebaseUser]);
 
-    // --- HELPER: PUSH NOTIFICATION ---
-    const pushNotification = (text: string, type: "file" | "star" | "habit") => {
+    // --- HELPER: PUSH NOTIFICATION (Local only) ---
+    const pushNotification = (text: string, type: "file" | "star" | "habit" | "friend") => {
         const newNotif: NotificationItem = {
             id: Date.now(),
             text,
@@ -81,7 +101,6 @@ export function StatsProvider({ children }: { children: ReactNode }) {
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     };
 
-    // --- NEW: TOGGLE SINGLE READ STATUS ---
     const toggleNotifRead = (id: number) => {
         setNotifications(prev => prev.map(n => 
             n.id === id ? { ...n, read: !n.read } : n
@@ -104,12 +123,7 @@ export function StatsProvider({ children }: { children: ReactNode }) {
                 newLevel++;
                 pushNotification(`Level Up! You are now Level ${newLevel}`, "star");
             }
-
-            const newStats = { ...prev, xp: newXp, level: newLevel };
-            if (firebaseUser && !firebaseUser.isAnonymous) {
-                setDoc(doc(db, "users", firebaseUser.uid), { stats: newStats }, { merge: true });
-            }
-            return newStats;
+            return { ...prev, xp: newXp, level: newLevel };
         });
     };
 
@@ -132,10 +146,7 @@ export function StatsProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (isTimerActive) {
             studyIntervalRef.current = setInterval(() => {
-                const today = new Date().toISOString().split('T')[0];
                 setStats(prev => {
-                    // Simple in-memory update for responsiveness
-                    // In a real app, you'd sync this to DB periodically
                     return { ...prev, todayMinutes: prev.todayMinutes + 1, totalMinutes: prev.totalMinutes + 1 };
                 });
             }, 60 * 1000);
@@ -161,7 +172,7 @@ export function StatsProvider({ children }: { children: ReactNode }) {
     return (
         <StatsContext.Provider value={{ 
             stats, setStats, notifications, addXp, pushNotification, 
-            markAllNotifsRead, toggleNotifRead, deleteNotification, // <--- EXPORTED HERE
+            markAllNotifsRead, toggleNotifRead, deleteNotification, 
             getLevelProgress, getRankTitle, isTimerActive 
         }}>
             {children}
