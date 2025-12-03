@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useStats } from "../context/stats";
 import { useCurrentUser } from "../context/currentuser";
 import { db } from "../firebase"; 
-// FIXED: Added 'arrayRemove' to imports for deleting friends
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, orderBy, limit } from "firebase/firestore";
 
 // --- ICONS ---
@@ -21,45 +20,202 @@ const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" heigh
 const EyeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>;
 const HelpIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>;
 const FriendsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+const CalendarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
 
-// --- COMPONENT: Fitness Modal ---
+// --- COMPONENT: Fitness Modal (Unified Colors + Fixed Rings) ---
 function FitnessModal({ onClose }: { onClose: () => void }) {
     const { stats } = useStats();
-    const dailyGoal = 60;
-    const progress = Math.min((stats.todayMinutes / dailyGoal) * 100, 100);
+    const dailyGoal = 60; // Minutes
+
+    // 1. STATS VIEW LOGIC
+    const rawProgress = (stats.todayMinutes / dailyGoal) * 100;
+    const visualProgress = Math.min(rawProgress, 100); // Caps the ring at 100% visually
+    
+    // SVG Math (Radius 50)
+    const circumference = 2 * Math.PI * 50;
+    const offset = circumference - (visualProgress / 100) * circumference;
+
+    // 2. CALENDAR VIEW LOGIC
+    const [viewMode, setViewMode] = useState<"STATS" | "CALENDAR">("STATS");
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    const getDaysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    const getFirstDayOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+    
+    const changeMonth = (delta: number) => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1));
+    };
+
+    const days = [];
+    const daysInMonth = getDaysInMonth(currentDate);
+    const firstDay = getFirstDayOfMonth(currentDate); 
+    const padding = firstDay === 0 ? 6 : firstDay - 1; 
+
+    for (let i = 0; i < padding; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(i);
+
+    // --- TRENDS LOGIC ---
+    // Force show graph immediately (No 3 day wait)
+    const historyCount = Object.keys(stats.history || {}).length;
+    const hasEnoughData = true; // <--- FORCED ON FOR DEMO
+    
+    const timeData = stats.timeOfDay || { morning: 0, afternoon: 0, night: 0 };
+    const maxVal = Math.max(timeData.morning, timeData.afternoon, timeData.night, 1);
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center animate-in fade-in duration-200">
             <div className="absolute inset-0" onClick={onClose}></div>
-            <div className="bg-[#181818] border border-gray-700 w-80 rounded-2xl p-6 shadow-2xl relative z-10">
+            <div className="bg-[#181818] border border-gray-700 w-80 rounded-3xl p-6 shadow-2xl relative z-10 min-h-[460px]">
+                
+                {/* HEADER */}
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-sm font-bold text-gray-200 flex items-center gap-2 uppercase tracking-wider"><ActivityIcon /> Habits Tracker</h2>
-                    <button onClick={onClose} className="text-gray-500 hover:text-white">✕</button>
+                    <h2 className="text-sm font-bold text-gray-200 flex items-center gap-2 uppercase tracking-wider">
+                        {viewMode === "STATS" ? <><ActivityIcon /> Habits</> : <><CalendarIcon /> History</>}
+                    </h2>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setViewMode(viewMode === "STATS" ? "CALENDAR" : "STATS")}
+                            className="text-gray-400 hover:text-blue-400 transition-colors"
+                        >
+                            {viewMode === "STATS" ? <CalendarIcon /> : <ActivityIcon />}
+                        </button>
+                        <button onClick={onClose} className="text-gray-500 hover:text-white">✕</button>
+                    </div>
                 </div>
                 
-                <div className="flex justify-center mb-6 relative">
-                    <div className="w-32 h-32 rounded-full border-8 border-[#333] flex items-center justify-center relative">
-                        <div 
-                            className="absolute w-full h-full border-8 border-green-500 rounded-full border-l-transparent border-b-transparent transition-all duration-1000 ease-out" 
-                            style={{ transform: `rotate(${45 + (progress * 3.6)}deg)` }} 
-                        ></div>
-                        <div className="text-center z-10">
-                            <div className="text-3xl font-bold text-white">{stats.todayMinutes}</div>
-                            <div className="text-[10px] text-gray-400 uppercase">Minutes</div>
+                {viewMode === "STATS" ? (
+                    <>
+                        {/* 1. MAIN RING (SVG - NO LOOPING) */}
+                        <div className="flex justify-center mb-6 relative">
+                            <div className="relative w-40 h-40 flex items-center justify-center">
+                                <svg className="transform -rotate-90 w-full h-full">
+                                    {/* Background Track */}
+                                    <circle cx="80" cy="80" r="50" stroke="#333" strokeWidth="12" fill="transparent" />
+                                    {/* Progress Fill (Green) */}
+                                    <circle
+                                        cx="80" cy="80" r="50"
+                                        stroke="#4ade80" // Always Green
+                                        strokeWidth="12" fill="transparent"
+                                        strokeDasharray={circumference}
+                                        strokeDashoffset={offset}
+                                        strokeLinecap="round"
+                                        className="transition-all duration-1000 ease-out"
+                                    />
+                                </svg>
+                                <div className="absolute text-center">
+                                    <div className="text-3xl font-bold text-white">{stats.todayMinutes}</div>
+                                    <div className="text-[9px] text-gray-400 uppercase tracking-widest">Minutes</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. STATS CARDS */}
+                        <div className="space-y-3 mb-6">
+                            <div className="bg-[#222] p-3 rounded-xl flex justify-between items-center">
+                                <span className="text-gray-400 text-xs uppercase">Daily Goal ({dailyGoal}m)</span>
+                                <span className={`${visualProgress >= 100 ? "text-green-400" : "text-blue-400"} font-bold text-sm`}>
+                                    {Math.round(rawProgress)}%
+                                </span>
+                            </div>
+                            <div className="bg-[#222] p-3 rounded-xl flex justify-between items-center">
+                                <span className="text-gray-400 text-xs uppercase">Current Streak</span>
+                                <span className="text-orange-400 font-bold text-sm">{stats.streak} Days</span>
+                            </div>
+                        </div>
+
+                        {/* 3. TRENDS CHART (UNIFIED COLORS) */}
+                        <div className="pt-4 border-t border-gray-700">
+                            <h3 className="text-[10px] text-gray-500 uppercase mb-3">Study Time Trends</h3>
+                            <div className="flex items-end justify-between h-16 gap-2 px-4">
+                                
+                                {/* MORNING (Blue) */}
+                                <div className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
+                                    <div className="w-full bg-blue-900/20 rounded-t-sm relative flex items-end h-full">
+                                        <div className="w-full bg-blue-500/80 transition-all duration-500 rounded-t-sm" style={{ height: `${(timeData.morning / maxVal) * 100}%` }}></div>
+                                    </div>
+                                    <span className="text-[9px] text-gray-400 font-bold">Morning</span>
+                                </div>
+
+                                {/* AFTERNOON (Blue) */}
+                                <div className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
+                                    <div className="w-full bg-blue-900/20 rounded-t-sm relative flex items-end h-full">
+                                        <div className="w-full bg-blue-500/80 transition-all duration-500 rounded-t-sm" style={{ height: `${(timeData.afternoon / maxVal) * 100}%` }}></div>
+                                    </div>
+                                    <span className="text-[9px] text-gray-400 font-bold">Afternoon</span>
+                                </div>
+
+                                {/* NIGHT (Blue) */}
+                                <div className="flex-1 flex flex-col items-center gap-1 group h-full justify-end">
+                                    <div className="w-full bg-blue-900/20 rounded-t-sm relative flex items-end h-full">
+                                        <div className="w-full bg-blue-500/80 transition-all duration-500 rounded-t-sm" style={{ height: `${(timeData.night / maxVal) * 100}%` }}></div>
+                                    </div>
+                                    <span className="text-[9px] text-gray-400 font-bold">Night</span>
+                                </div>
+
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    // --- CALENDAR VIEW (APPLE STYLE RINGS) ---
+                    <div className="animate-in fade-in slide-in-from-right-4">
+                        <div className="flex justify-between items-center mb-6 px-2">
+                            <button onClick={() => changeMonth(-1)} className="text-gray-400 hover:text-white">&lt;</button>
+                            <span className="text-sm font-bold text-white">
+                                {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                            </span>
+                            <button onClick={() => changeMonth(1)} className="text-gray-400 hover:text-white">&gt;</button>
+                        </div>
+                        
+                        <div className="grid grid-cols-7 gap-2 text-center mb-2">
+                            {['M','T','W','T','F','S','S'].map((d, i) => (
+                                <div key={i} className="text-[10px] text-gray-500 font-bold">{d}</div>
+                            ))}
+                        </div>
+                        
+                        <div className="grid grid-cols-7 gap-y-2 gap-x-1 justify-items-center">
+                            {days.map((day, i) => {
+                                if (!day) return <div key={i} className="w-8 h-8"></div>;
+                                
+                                const dateKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                                const minutes = stats.history[dateKey] || 0;
+                                const dayProgress = Math.min((minutes / dailyGoal) * 100, 100);
+                                
+                                const r = 14; 
+                                const c = 2 * Math.PI * r;
+                                const off = c - (dayProgress / 100) * c;
+                                
+                                // Red Rings (Apple Style)
+                                const ringColor = dayProgress >= 100 ? "#ef4444" : "#f87171"; 
+
+                                return (
+                                    <div key={i} className="relative w-8 h-8 flex items-center justify-center group cursor-default">
+                                        <svg className="absolute w-full h-full transform -rotate-90">
+                                            {/* Track */}
+                                            <circle cx="16" cy="16" r={r} stroke="#333" strokeWidth="3" fill="transparent" />
+                                            {/* Fill */}
+                                            {minutes > 0 && (
+                                                <circle 
+                                                    cx="16" cy="16" r={r} 
+                                                    stroke={ringColor} strokeWidth="3" fill="transparent"
+                                                    strokeDasharray={c} strokeDashoffset={off} strokeLinecap="round"
+                                                />
+                                            )}
+                                        </svg>
+                                        <span className={`text-[10px] z-10 font-medium ${minutes > 0 ? "text-white" : "text-gray-500"}`}>
+                                            {day}
+                                        </span>
+                                        {/* Hover Tooltip */}
+                                        {minutes > 0 && (
+                                            <div className="absolute bottom-9 bg-black border border-gray-700 text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">
+                                                {minutes} mins
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
-                </div>
-
-                <div className="space-y-3">
-                    <div className="bg-[#222] p-3 rounded-xl flex justify-between items-center">
-                        <span className="text-gray-400 text-xs uppercase">Daily Goal ({dailyGoal}m)</span>
-                        <span className="text-green-400 font-bold text-sm">{Math.round(progress)}%</span>
-                    </div>
-                    <div className="bg-[#222] p-3 rounded-xl flex justify-between items-center">
-                        <span className="text-gray-400 text-xs uppercase">Current Streak</span>
-                        <span className="text-orange-400 font-bold text-sm">{stats.streak} Days</span>
-                    </div>
-                </div>
+                )}
             </div>
         </div>
     );
@@ -273,6 +429,7 @@ export default function Header({ onLogout }: { onLogout?: () => void }) {
         notifications, markAllNotifsRead, toggleNotifRead, deleteNotification 
     } = useStats(); 
 
+
     const { currentUser, isGuest, firebaseUser } = useCurrentUser();
     
     // UI States
@@ -429,12 +586,14 @@ export default function Header({ onLogout }: { onLogout?: () => void }) {
             }
         } catch (e) { console.error("Error declining", e); }
     };
+    
 
     // Close Dropdowns
     useEffect(() => {
         const handleClickOutside = () => { 
             if (showMoreMenu || showProfileMenu || showNotifMenu || showSearchDropdown || activeNotifId !== null) {
                 setShowProfileMenu(false); setShowMoreMenu(false); setShowNotifMenu(false); setShowSearchDropdown(false); setActiveNotifId(null);
+                setSearchQuery(""); // Clears the search bar when you click away
             }
         };
         document.addEventListener("click", handleClickOutside);

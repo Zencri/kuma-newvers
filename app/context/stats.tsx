@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { useCurrentUser } from "./currentuser";
 import { db } from "../firebase";
-import { doc, setDoc, onSnapshot } from "firebase/firestore"; // <--- CHANGED getDoc to onSnapshot
+import { doc, setDoc, onSnapshot } from "firebase/firestore"; 
 
 // --- TYPES ---
 export type NotificationItem = {
@@ -22,8 +22,10 @@ type UserStats = {
     todayMinutes: number;
     streak: number;
     lastStudyDate: string;
-    history: { [date: string]: number };
+    history: { [date: string]: number }; // Format: "2023-10-25": 45
     friends: string[]; 
+    // NEW: Track when the user studies
+    timeOfDay: { morning: number; afternoon: number; night: number; }; 
 };
 
 type StatsContextType = {
@@ -45,7 +47,6 @@ const StatsContext = createContext<StatsContextType | undefined>(undefined);
 export function StatsProvider({ children }: { children: ReactNode }) {
     const { firebaseUser } = useCurrentUser();
     
-    // --- STATS STATE ---
     const [stats, setStats] = useState<UserStats>({
         xp: 0,
         level: 1,
@@ -54,38 +55,32 @@ export function StatsProvider({ children }: { children: ReactNode }) {
         streak: 0,
         lastStudyDate: new Date().toISOString().split('T')[0],
         history: {},
-        friends: [] 
+        friends: [],
+        timeOfDay: { morning: 0, afternoon: 0, night: 0 } // Default
     });
 
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-
     const [isTimerActive, setIsTimerActive] = useState(false);
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
     const studyIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // --- REAL-TIME LISTENER (The Fix) ---
+    // --- REAL-TIME LISTENER ---
     useEffect(() => {
         if (firebaseUser && !firebaseUser.isAnonymous) {
-            // Listen to the DB constantly
             const unsub = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    
-                    // Update Stats if changed
                     if (data.stats) setStats(data.stats);
-                    
-                    // Update Notifications if changed (Instant Friend Requests!)
                     if (data.notifications) setNotifications(data.notifications);
                 } else {
-                    // Initialize for new user
                      setNotifications([{ id: 1, text: "Welcome to Kuma AI!", time: "Just now", type: "star", read: false }]);
                 }
             });
-            return () => unsub(); // Cleanup listener on logout
+            return () => unsub(); 
         }
     }, [firebaseUser]);
 
-    // --- HELPER: PUSH NOTIFICATION (Local only) ---
+    // --- HELPER: PUSH NOTIFICATION ---
     const pushNotification = (text: string, type: "file" | "star" | "habit" | "friend") => {
         const newNotif: NotificationItem = {
             id: Date.now(),
@@ -97,27 +92,15 @@ export function StatsProvider({ children }: { children: ReactNode }) {
         setNotifications(prev => [newNotif, ...prev]);
     };
 
-    const markAllNotifsRead = () => {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    };
+    const markAllNotifsRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const toggleNotifRead = (id: number) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: !n.read } : n));
+    const deleteNotification = (id: number) => setNotifications(prev => prev.filter(n => n.id !== id));
 
-    const toggleNotifRead = (id: number) => {
-        setNotifications(prev => prev.map(n => 
-            n.id === id ? { ...n, read: !n.read } : n
-        ));
-    };
-
-    const deleteNotification = (id: number) => {
-        setNotifications(prev => prev.filter(n => n.id !== id));
-    };
-
-    // --- XP & LEVEL LOGIC ---
     const addXp = (amount: number) => {
         setStats(prev => {
             let newXp = prev.xp + amount;
             let newLevel = prev.level;
             const xpNeeded = newLevel * 100;
-
             if (newXp >= xpNeeded) {
                 newXp -= xpNeeded;
                 newLevel++;
@@ -127,7 +110,7 @@ export function StatsProvider({ children }: { children: ReactNode }) {
         });
     };
 
-    // --- TIMER LOGIC ---
+    // --- TIMER LOGIC (UPDATED FOR TRENDS) ---
     const resetIdleTimer = () => {
         setIsTimerActive(true);
         if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -146,8 +129,31 @@ export function StatsProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (isTimerActive) {
             studyIntervalRef.current = setInterval(() => {
+                const now = new Date();
+                const todayKey = now.toISOString().split('T')[0];
+                const hour = now.getHours();
+
                 setStats(prev => {
-                    return { ...prev, todayMinutes: prev.todayMinutes + 1, totalMinutes: prev.totalMinutes + 1 };
+                    // 1. Update Minutes
+                    const newTotal = prev.totalMinutes + 1;
+                    const newToday = prev.todayMinutes + 1;
+                    
+                    // 2. Update History (For Calendar)
+                    const newHistory = { ...prev.history, [todayKey]: newToday };
+
+                    // 3. Update Time Trends
+                    const newTimeOfDay = { ...prev.timeOfDay } || { morning: 0, afternoon: 0, night: 0 };
+                    if (hour >= 5 && hour < 12) newTimeOfDay.morning += 1;
+                    else if (hour >= 12 && hour < 18) newTimeOfDay.afternoon += 1;
+                    else newTimeOfDay.night += 1;
+
+                    return { 
+                        ...prev, 
+                        totalMinutes: newTotal, 
+                        todayMinutes: newToday,
+                        history: newHistory,
+                        timeOfDay: newTimeOfDay
+                    };
                 });
             }, 60 * 1000);
         } else {
