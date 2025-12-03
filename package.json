@@ -10,13 +10,19 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "@tauri-apps/api": "^2.9.0",
     "@tauri-apps/plugin-dialog": "~2",
     "@tauri-apps/plugin-fs": "~2",
     "@tauri-apps/plugin-shell": "~2",
+    "firebase": "^12.6.0",
     "next": "16.0.1",
+    "pdfjs-dist": "^5.4.449",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
