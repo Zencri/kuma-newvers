@@ -111,11 +111,10 @@ function Chat({ username, content }: ChatProps) {
     }
 
     return (
-        <div className={`flex mb-4 ${isAI ? "justify-start" : "justify-end pr-[40px]"}`}>
-            <div className={`pl-[5px] ${!isAI ? "text-right" : ""}`}>
-                <span className="text-[14px] font-semibold">{username} <span className="text-[8px] text-[#808080]">now</span></span>
-                <br />
-                <div className={`text-[14px] ${isAI ? "prose prose-invert prose-sm max-w-none [&>p]:my-1" : "text-white whitespace-pre-wrap"}`}>
+        <div className={`flex mb-4 gap-2 ${isAI ? "justify-start" : "justify-end"}`}>
+            <div className={`max-w-xs lg:max-w-md ${isAI ? "bg-[#2a2a2a] rounded-tr-2xl rounded-br-2xl rounded-bl-2xl" : "bg-blue-600/30 border border-blue-500/40 rounded-tl-2xl rounded-br-2xl rounded-bl-2xl"} p-3 shadow-sm`}>
+                <span className={`text-[12px] font-semibold ${isAI ? "text-gray-400" : "text-blue-300"}`}>{username}</span>
+                <div className={`text-[13px] mt-1 ${isAI ? "prose prose-invert prose-sm max-w-none [&>p]:my-1 text-gray-200" : "text-white whitespace-pre-wrap"}`}>
                     {isAI ? (
                         <ReactMarkdown remarkPlugins={[remarkGfm]}
                             components={{
@@ -435,20 +434,10 @@ User said: "${userMsg}"
             {showLogoutModal && <LogoutModal onConfirm={handleLogoutConfirm} onCancel={() => setShowLogoutModal(false)} />}
             <Header onLogout={() => setShowLogoutModal(true)} />
 
-            <div className="flex-1 overflow-y-auto pt-[20px] pl-[20px] h-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                {messages.map((msg, idx) => {
-                    const isAI = msg.username === "Kikuchiyo" || msg.username === "Kuma";
-                    const nextMsg = messages[idx + 1];
-                    const nextIsAI = nextMsg && (nextMsg.username === "Kikuchiyo" || nextMsg.username === "Kuma");
-                    const showDivider = nextMsg && isAI !== nextIsAI;
-                    
-                    return (
-                        <div key={idx}>
-                            <Chat username={msg.username} content={msg.content} />
-                            {showDivider && <div className="w-full border-t border-gray-600/30 my-3"></div>}
-                        </div>
-                    );
-                })}
+            <div className="flex-1 overflow-y-auto pt-[20px] pl-[20px] pr-[20px] h-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                {messages.map((msg, idx) => (
+                    <Chat key={idx} username={msg.username} content={msg.content} />
+                ))}
                 <div ref={bottomRef} />
             </div>
             
