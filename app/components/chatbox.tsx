@@ -111,8 +111,8 @@ function Chat({ username, content }: ChatProps) {
     }
 
     return (
-        <div className="">
-            <div className="pl-[5px]">
+        <div className={`flex mb-4 ${isAI ? "justify-start" : "justify-end pr-[40px]"}`}>
+            <div className={`pl-[5px] ${!isAI ? "text-right" : ""}`}>
                 <span className="text-[14px] font-semibold">{username} <span className="text-[8px] text-[#808080]">now</span></span>
                 <br />
                 <div className={`text-[14px] ${isAI ? "prose prose-invert prose-sm max-w-none [&>p]:my-1" : "text-white whitespace-pre-wrap"}`}>
@@ -136,7 +136,6 @@ function Chat({ username, content }: ChatProps) {
                     )}
                 </div>
             </div>
-            <hr className="my-1 mr-[15px] border-gray-300 opacity-20" />
         </div>
     )
 }
@@ -422,7 +421,7 @@ User said: "${userMsg}"
     };
 
     return (
-        <div className="flex-1 flex flex-col h-full relative bg-[#212121]">
+        <div className="flex-1 flex flex-col h-full relative bg-[#1a1a1a]">
             {showLoginModal && (
                 <LoginModal 
                     preserveSession={true} 
@@ -436,14 +435,24 @@ User said: "${userMsg}"
             {showLogoutModal && <LogoutModal onConfirm={handleLogoutConfirm} onCancel={() => setShowLogoutModal(false)} />}
             <Header onLogout={() => setShowLogoutModal(true)} />
 
-            <div className={`flex-1 overflow-y-auto ${sideBarCollapsed ? "w-full pt-[20px] pl-[20px]" : "w-[calc(100%-50px)] ml-[50px]"} h-full`}>
-                {messages.map((msg, idx) => (
-                    <Chat key={idx} username={msg.username} content={msg.content} />
-                ))}
+            <div className="flex-1 overflow-y-auto pt-[20px] pl-[20px] h-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                {messages.map((msg, idx) => {
+                    const isAI = msg.username === "Kikuchiyo" || msg.username === "Kuma";
+                    const nextMsg = messages[idx + 1];
+                    const nextIsAI = nextMsg && (nextMsg.username === "Kikuchiyo" || nextMsg.username === "Kuma");
+                    const showDivider = nextMsg && isAI !== nextIsAI;
+                    
+                    return (
+                        <div key={idx}>
+                            <Chat username={msg.username} content={msg.content} />
+                            {showDivider && <div className="w-full border-t border-gray-600/30 my-3"></div>}
+                        </div>
+                    );
+                })}
                 <div ref={bottomRef} />
             </div>
             
-            <div className={`${sideBarCollapsed ? "w-[calc(100%-10px)]" : "w-[calc(100%-50px)]"} dark:bg-[#3e3e3e] p-[5px] rounded-tl-[10px] rounded-tr-[10px] ${sideBarCollapsed ? "ml-[10px]" : "ml-[50px]"} flex items-end gap-2`}>
+            <div className="dark:bg-[#3e3e3e] p-[5px] rounded-tl-[10px] rounded-tr-[10px] flex items-end gap-2 pr-[20px]">
                 <input type="file" ref={fileInputRef} accept="application/pdf" className="hidden" onChange={handleFileUpload} />
                 <button onClick={() => fileInputRef.current?.click()} className="p-2 mb-1 text-gray-400 hover:text-white transition-colors flex items-center gap-1">
                     📎 {documents.length > 0 && <span className="text-[10px] bg-blue-600 text-white rounded-full px-1">{documents.length}</span>}
@@ -451,7 +460,7 @@ User said: "${userMsg}"
 
                 <textarea
                     placeholder={documents.length > 0 ? "Ask about your notes..." : "Upload a PDF to start..."}
-                    className="flex-1 p-2 bg-transparent text-white border border-gray-500 rounded-md min-h-[45px] max-h-[200px] resize-none focus:outline-none focus:border-blue-500"
+                    className="flex-1 p-2 bg-[#2d2d2d] text-white border border-gray-600 rounded-md min-h-[45px] max-h-[200px] resize-none focus:outline-none focus:border-blue-500 shadow-inner shadow-black/50"
                     rows={1}
                     value={input}
                     onChange={e => setInput(e.target.value)}
@@ -463,10 +472,16 @@ User said: "${userMsg}"
                     }}
                 />
                 
-                <div className={`px-4 py-2 bg-blue-600 text-white rounded-md select-none ${!chatSendEnabled ? "opacity-50 cursor-not-allowed pointer-events-none" : "cursor-pointer"}`}
-                    role="button"
+                <button
+                    className={`px-4 py-2 mb-1 bg-blue-600 hover:bg-blue-500 text-white rounded-md flex items-center justify-center transition-colors ${!chatSendEnabled ? "opacity-50 cursor-not-allowed pointer-events-none" : "cursor-pointer"}`}
                     onClick={() => { if (!disabled) doSend(); }}
-                >Send</div>
+                    disabled={disabled}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
             </div>
                 
         </div>

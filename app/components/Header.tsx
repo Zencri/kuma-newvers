@@ -604,7 +604,7 @@ export default function Header({ onLogout }: { onLogout?: () => void }) {
             {showFriendsModal && <FriendsModal onClose={() => setShowFriendsModal(false)} />}
 
             {/* HEADER BAR */}
-            <div className="h-[60px] border-b border-gray-700 flex items-center justify-between px-6 bg-[#212121] relative z-[100]">
+            <div className="h-[60px] border-b border-gray-700/50 flex items-center justify-between px-6 bg-gradient-to-r from-[#222222] via-[#2a2a2a] to-[#222222] shadow-md shadow-black/40 relative z-[100]">
                 
                 {/* SEARCH BAR */}
                 <div className="relative w-64" onClick={(e) => e.stopPropagation()}>

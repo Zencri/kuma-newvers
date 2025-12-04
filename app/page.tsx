@@ -10,7 +10,7 @@ import { QuizProvider, useQuiz } from "./context/quiz";
 import { StatsProvider } from "./context/stats"; // <--- 1. IMPORT THIS
 
 function MainContent() {
-  const [sideBarCollapsed, setSideBarCollapsed] = useState(true);
+  const [sideBarCollapsed, setSideBarCollapsed] = useState(false);
   const [chatSendEnabled, setChatSendEnabled] = useState(true);
   
   const { quizMode, modeType } = useQuiz();

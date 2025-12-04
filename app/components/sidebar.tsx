@@ -146,33 +146,31 @@ export default function Sidebar({ sideBarCollapsed, setSideBarCollapsed }: Sideb
 
             {showLogoutModal && <LogoutModal onConfirm={handleLogoutConfirm} onCancel={() => setShowLogoutModal(false)} />}
 
-           
+            
 
-            {sideBarCollapsed ? (
+            {/* Toggle Button - Follows Sidebar */}
+            <div 
+              className={`fixed top-1/2 -translate-y-1/2 z-[9999] hover:bg-[#424242] px-2 py-3 text-lg text-white cursor-pointer rounded-r-lg transition-all duration-300 ease-in-out bg-[#2d2d2d] shadow-lg shadow-black/60 border-l border-gray-600/30 ${!sideBarCollapsed ? "left-[290px]" : "left-[-10px]"}`}
+              onClick={() => setSideBarCollapsed(!sideBarCollapsed)}
+            >
+              {sideBarCollapsed ? "›" : "‹"}
+            </div>
 
-                <div className="w-[300px] h-full p-4 dark:bg-[#3c3c3c] rounded-br-[10px] rounded-tr-[10px] flex flex-col">
+            <div className={`transition-all duration-300 ease-in-out flex flex-col h-full dark:bg-[#3c3c3c] rounded-br-[10px] rounded-tr-[10px] ${!sideBarCollapsed ? "w-[300px] p-4" : "w-0 overflow-hidden"}`}>
 
                
 
-                {/* TOP BAR */}
+                 {/* TOP BAR */}
 
-                <div className="relative w-full">
+                 <div className="relative w-full">
 
-                    {/* Username Display */}
+                     {/* Username Display */}
 
-                    <div className="p-[5px] bg-[#222222] rounded-[20px] text-center select-none cursor-default text-[10px] px-3 font-bold text-gray-300">
+                     <div className="p-[5px] bg-[#222222] rounded-[20px] text-center select-none cursor-default text-[10px] px-3 font-bold text-gray-300 shadow-lg shadow-black/50">
 
-                        {currentUser}
+                         {currentUser}
 
-                    </div>
-
-                   
-
-                    <div className="absolute right-[-35px] top-[-10px] rounded-tr-full rounded-br-full pr-[15px] pl-[5px] hover:dark:bg-[#3c3c3c] cursor-pointer w-[15px] text-center" onClick={() => setSideBarCollapsed(!sideBarCollapsed)}>
-
-                        &lt;
-
-                    </div>
+                     </div>
 
 
 
@@ -184,7 +182,7 @@ export default function Sidebar({ sideBarCollapsed, setSideBarCollapsed }: Sideb
 
                             onClick={createNewSession}
 
-                            className="cursor-pointer hover:dark:bg-[#565656] w-[30px] h-[30px] flex items-center justify-center text-center rounded-full bg-[#4a4a4a] transition-colors"
+                            className="cursor-pointer hover:dark:bg-[#565656] w-[30px] h-[30px] flex items-center justify-center text-center rounded-full bg-[#4a4a4a] transition-colors shadow-lg shadow-black/50"
 
                             title="Start New Session"
 
@@ -400,21 +398,7 @@ export default function Sidebar({ sideBarCollapsed, setSideBarCollapsed }: Sideb
 
                 </div>
 
-
-
-            </div>) : (
-
-            <div className="w-[40px] h-[100dvh] p-4 dark:bg-[#3c3c3c] rounded-br-[10px] rounded-tr-[10px] fixed flex items-start justify-center">
-
-                <div className="hover:dark:bg-[#565656] px-[10px] text-lg cursor-pointer rounded-full" onClick={() => setSideBarCollapsed(!sideBarCollapsed)}>
-
-                    &gt;
-
-                </div>
-
-            </div>)
-
-        }
+            </div>
 
         </>
 
