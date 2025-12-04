@@ -1,0 +1,312 @@
+"use client"
+
+import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
+import { useCurrentUser } from "./currentuser"; 
+
+import { doc, updateDoc, arrayRemove } from "firebase/firestore"; 
+import { db } from "../firebase";
+
+// Types
+export type FlashcardData = { id: number; front: string; back: string; };
+export type QuizQuestion = {
+    id: number;
+    question: string;
+    options: string[];
+    correctIndex: number;
+    hint?: string;
+    explanation: string;
+    topic: string;
+};
+export type UploadedDocument = {
+    name: string;
+    content: string;
+};
+
+type SavedSession = {
+    id: string;
+    title: string;
+    messages: { username: string; content: string }[];
+    documents: UploadedDocument[];
+    flashcards: FlashcardData[];
+    quizQuestions: QuizQuestion[];
+    pinned?: boolean; 
+    masteryScore?: number;
+
+    isShared?: boolean;      
+    participants?: string[];  
+};
+
+type QuizContextType = {
+    quizMode: boolean;
+    setQuizMode: (active: boolean) => void;
+    modeType: "QUIZ" | "FLASHCARDS"; 
+    setModeType: (type: "QUIZ" | "FLASHCARDS") => void;
+    sessionTitle: string;
+    setSessionTitle: (title: string) => void;
+    documents: UploadedDocument[];
+    addDocument: (doc: UploadedDocument) => void;
+    messages: { username: string; content: string }[];
+    setMessages: React.Dispatch<React.SetStateAction<{ username: string; content: string }[]>>;
+    flashcards: FlashcardData[];
+    setFlashcards: (cards: FlashcardData[]) => void;
+    quizQuestions: QuizQuestion[];
+    setQuizQuestions: (questions: QuizQuestion[]) => void;
+    sessions: SavedSession[];
+    setSessions: React.Dispatch<React.SetStateAction<SavedSession[]>>; 
+    currentSessionId: string; 
+    createNewSession: () => void;
+    loadSession: (id: string) => void;
+    deleteSession: (id: string) => void;
+    renameSession: (id: string, newTitle: string) => void;
+    togglePinSession: (id: string) => void;
+    clearAllSessions: () => void;
+    enableDataPreservation: () => void;
+    reviewTrigger: string | null; // <--- ADD THIS
+    setReviewTrigger: (prompt: string | null) => void; // <--- ADD THIS
+
+    startTargetedRetry: () => void;
+    updateSessionMastery: (sessionId: string, score: number) => void; // <--- ADD THIS
+    makeSessionShared: (sessionId: string, friendUid: string) => void; // <--- ADD THIS
+};
+
+const QuizContext = createContext<QuizContextType | undefined>(undefined);
+
+export function QuizProvider({ children }: { children: ReactNode }) {
+    // We need firebaseUser to remove our ID from shared chats
+    const { firebaseUser } = useCurrentUser();
+    const DEFAULT_MSG = { username: "Kikuchiyo", content: "Hello! Upload your lecture notes (PDF), then ask for **Flashcards** or a **Quiz**." };
+
+    const [quizMode, setQuizMode] = useState(false);
+    const [modeType, setModeType] = useState<"QUIZ" | "FLASHCARDS">("QUIZ");
+    const [currentSessionId, setCurrentSessionId] = useState<string>(Date.now().toString());
+    const [sessionTitle, setSessionTitle] = useState("New Session");
+    const [documents, setDocuments] = useState<UploadedDocument[]>([]);
+    const [messages, setMessages] = useState<{ username: string; content: string }[]>([DEFAULT_MSG]);
+    const [flashcards, setFlashcards] = useState<FlashcardData[]>([]);
+    const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
+    const [sessions, setSessions] = useState<SavedSession[]>([]);
+
+    const [reviewTrigger, setReviewTrigger] = useState<string | null>(null); // <--- ADD THIS
+
+    const [failedQuestionIds, setFailedQuestionIds] = useState<number[]>([]); 
+
+    const makeSessionShared = (sessionId: string, friendUid: string) => {
+        setSessions(prev => prev.map(s => {
+            if (s.id === sessionId) {
+                if (s.isShared) return s;
+                return {
+                    ...s,
+                    // CHANGE: Use (SHARED) instead of SHARED:
+                    title: `(SHARED) ${s.title}`, 
+                    isShared: true,
+                    participants: [s.id, friendUid]
+                };
+            }
+            return s;
+        }));
+    };
+
+    // Helper to save the mistakes
+    const saveFailedQuestions = (ids: number[]) => {
+        setFailedQuestionIds(ids);
+    };
+
+    // The core function called by the Retry button
+    const startTargetedRetry = () => {
+        if (failedQuestionIds.length === 0) {
+            setQuizMode(false); // If somehow empty, just close it.
+            return;
+        }
+
+        // 1. Filter the quiz questions to only include the failed ones
+        const weakQuestions = quizQuestions.filter(q => failedQuestionIds.includes(q.id));
+        
+        // 2. Set the NEW quiz list to only those weak questions
+        setQuizQuestions(weakQuestions); 
+        
+        // 3. Open the quiz panel (QuizPanel's useEffect will handle the reset to Q1)
+        setQuizMode(true); 
+    };
+    
+    // --- NEW: Preservation Ref ---
+    const preserveDataRef = useRef(false);
+
+    const enableDataPreservation = () => {
+        console.log("Data preservation enabled for next login.");
+        preserveDataRef.current = true;
+    };
+
+    // --- 3. LIVE SYNC (THE FIX) ---
+    // This updates the 'sessions' list in real-time so Chatbox can see it and save it.
+    useEffect(() => {
+        setSessions(prev => {
+            // 1. FIND THE EXISTING SESSION FIRST (You were missing this line!)
+            const existingSession = prev.find(s => s.id === currentSessionId);
+
+            // 2. Define current session object
+            const currentData: SavedSession = {
+                id: currentSessionId,
+                title: sessionTitle,
+                messages: messages,
+                documents: documents,
+                flashcards: flashcards,
+                quizQuestions: quizQuestions,
+                // Now these lines will work because existingSession is defined above
+                pinned: existingSession?.pinned || false,
+                // THE FIX: Keep the existing score, or default to 0
+                masteryScore: existingSession?.masteryScore || 0 
+            };
+
+            // 3. Check if it already exists in the list
+            const index = prev.findIndex(s => s.id === currentSessionId);
+            
+            // 4. Check if it has meaningful data (Prevent saving empty "New Session" spam)
+            const isNewAndEmpty = index === -1 && 
+                                  messages.length <= 1 && 
+                                  documents.length === 0 &&
+                                  sessionTitle === "New Session";
+
+            if (isNewAndEmpty) return prev; // Do nothing if it's just an empty new tab
+
+            // 5. Update or Add
+            if (index !== -1) {
+                // Replace existing session with live data
+                const newList = [...prev];
+                newList[index] = currentData;
+                return newList;
+            } else {
+                // Add new session to the top
+                return [currentData, ...prev];
+            }
+        });
+    }, [messages, sessionTitle, documents, flashcards, quizQuestions, currentSessionId]);
+
+
+    // HELPERS
+    const addDocument = (doc: UploadedDocument) => {
+        setDocuments(prev => [...prev, doc]);
+        if (sessionTitle === "New Session") setSessionTitle(doc.name);
+    };
+
+    const getUpdatedSessions = () => {
+        // Used for manual actions, keeps the logic consistent
+        const currentData: SavedSession = {
+            id: currentSessionId,
+            title: sessionTitle,
+            messages: messages,
+            documents: documents,
+            flashcards: flashcards,
+            quizQuestions: quizQuestions,
+            pinned: sessions.find(s => s.id === currentSessionId)?.pinned || false
+        };
+        const hasData = messages.length > 1 || documents.length > 0;
+        const exists = sessions.find(s => s.id === currentSessionId);
+        let newSessionList = [...sessions];
+        if (exists) newSessionList = newSessionList.map(s => s.id === currentSessionId ? currentData : s);
+        else if (hasData) newSessionList = [currentData, ...newSessionList];
+        return newSessionList;
+    };
+
+    const loadSession = (id: string) => {
+        if (id === currentSessionId) return;
+        // Logic: The Live Sync effect above has already updated 'sessions', so we just switch.
+        const target = sessions.find(s => s.id === id);
+        if (target) {
+            setCurrentSessionId(target.id);
+            setSessionTitle(target.title);
+            setMessages(target.messages);
+            setDocuments(target.documents);
+            setFlashcards(target.flashcards || []);
+            setQuizQuestions(target.quizQuestions || []);
+            setQuizMode(false);
+        }
+    };
+
+    const createNewSession = () => {
+        // The Live Sync ensures the *old* session is already saved in the list.
+        // We just reset the current state.
+        const newId = Date.now().toString();
+        setCurrentSessionId(newId);
+        setSessionTitle("New Session");
+        setMessages([DEFAULT_MSG]);
+        setDocuments([]);
+        setFlashcards([]);
+        setQuizQuestions([]);
+        setQuizMode(false);
+    };
+
+    const deleteSession = async (id: string) => {
+        // 1. Find the session to see if it is Shared
+        const targetSession = sessions.find(s => s.id === id);
+
+        // 2. IF SHARED: Remove my ID from the database (Stop the listener from finding it)
+        if (targetSession?.isShared && firebaseUser?.uid) {
+            try {
+                await updateDoc(doc(db, "shared_chats", id), {
+                    participants: arrayRemove(firebaseUser.uid)
+                });
+            } catch (e) {
+                console.error("Error leaving shared chat:", e);
+            }
+        }
+
+        // 3. Local Deletion (Standard Logic)
+        if (id === currentSessionId) {
+            createNewSession();
+            setSessions(prev => prev.filter(s => s.id !== id));
+        } else {
+            setSessions(prev => prev.filter(s => s.id !== id));
+        }
+    };
+
+    const renameSession = (id: string, newTitle: string) => {
+        if (id === currentSessionId) setSessionTitle(newTitle);
+        setSessions(prev => prev.map(s => s.id === id ? { ...s, title: newTitle } : s));
+    };
+
+    const togglePinSession = (id: string) => {
+        setSessions(prev => prev.map(s => s.id === id ? { ...s, pinned: !s.pinned } : s));
+    };
+
+
+    const updateSessionMastery = (sessionId: string, score: number) => {
+        setSessions(prev => prev.map(s => 
+            s.id === sessionId ? { ...s, masteryScore: score } : s
+        ));
+    };
+
+    const clearAllSessions = () => {
+        setSessions([]); 
+        const newId = Date.now().toString();
+        setCurrentSessionId(newId);
+        setSessionTitle("New Session");
+        setMessages([DEFAULT_MSG]);
+        setDocuments([]);
+        setFlashcards([]);
+        setQuizQuestions([]);
+        setQuizMode(false);
+    };
+
+    return (
+        <QuizContext.Provider value={{ 
+            quizMode, setQuizMode, modeType, setModeType, 
+            sessionTitle, setSessionTitle, documents, addDocument, messages, setMessages,
+            flashcards, setFlashcards, quizQuestions, setQuizQuestions,
+            sessions, setSessions, createNewSession, loadSession, currentSessionId,
+            deleteSession, renameSession, togglePinSession, clearAllSessions,
+            enableDataPreservation,
+            // --- ADDED FOR AI RETRY ---
+            reviewTrigger, setReviewTrigger,
+            failedQuestionIds, saveFailedQuestions,
+            startTargetedRetry, updateSessionMastery,makeSessionShared // <--- NEW FUNCTION
+        }}>
+            {children}
+        </QuizContext.Provider>
+    );
+}
+
+export function useQuiz() {
+    const context = useContext(QuizContext);
+    if (!context) throw new Error("useQuiz must be used within a QuizProvider");
+    return context;
+}
